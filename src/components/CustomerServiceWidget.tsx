@@ -41,6 +41,26 @@ const LiveKitComponent = ({ onClose }: { onClose: () => void }) => {
   useEffect(() => {
     if (roomState === ConnectionState.Connected && localParticipant) {
       localParticipant.setMicrophoneEnabled(true);
+      
+      // Get metadata from participant
+      const metadata = localParticipant.metadata;
+      if (metadata) {
+        try {
+          const { phoneNumber } = JSON.parse(metadata);
+          console.log('Connected user phone number:', phoneNumber);
+          
+          // Publish initial system message with phone number
+          const timestamp = new Date().getTime();
+          setTranscripts(prev => [...prev, {
+            name: "System",
+            message: `Connected with phone number: ${phoneNumber}`,
+            timestamp,
+            isSelf: false,
+          }]);
+        } catch (err) {
+          console.error('Error parsing metadata:', err);
+        }
+      }
     }
   }, [roomState, localParticipant]);
 

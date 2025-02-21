@@ -25,8 +25,14 @@ export default async function handleToken(
       return;
     }
 
+    const { phoneNumber } = req.body;
+    if (!phoneNumber) {
+      res.status(400).json({ error: 'Phone number is required' });
+      return;
+    }
+
     const roomName = `room-${generateRandomAlphanumeric(4)}-${generateRandomAlphanumeric(4)}`;
-    const identity = `identity-${generateRandomAlphanumeric(4)}`
+    const identity = `identity-${generateRandomAlphanumeric(4)}`;
 
     const grant: VideoGrant = {
       room: roomName,
@@ -36,10 +42,15 @@ export default async function handleToken(
       canSubscribe: true,
     };
 
-    const token = await createToken({ identity }, grant);
+    const token = await createToken({ 
+      identity,
+      metadata: JSON.stringify({ phoneNumber }) 
+    }, grant);
+    
     const result: TokenResult = {
       identity,
       accessToken: token,
+      roomName,
     };
 
     res.status(200).json(result);
