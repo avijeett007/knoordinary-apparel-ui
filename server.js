@@ -2,17 +2,16 @@ const { createServer } = require('https');
 const { parse } = require('url');
 const next = require('next');
 const fs = require('fs');
-const path = require('path');
 
 const dev = process.env.NODE_ENV !== 'production';
-const hostname = 'localhost';
+const hostname = 'esdemo.ddns.net';
 const port = 3000;
 const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
 
 const httpsOptions = {
-  key: fs.readFileSync(path.join(__dirname, './certificates/localhost-key.pem')),
-  cert: fs.readFileSync(path.join(__dirname, './certificates/localhost.pem')),
+  key: fs.readFileSync('key.pem'),
+  cert: fs.readFileSync('cert.pem'),
 };
 
 app.prepare().then(() => {
