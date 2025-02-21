@@ -1,12 +1,13 @@
 module.exports = {
-  apps: [{
-    name: 'kno2gether-shopper',
-    script: 'npm',
-    args: 'run dev',
-    watch: false,
-    env: {
-      NODE_ENV: 'development',
-      PORT: 3000
-    }
-  }]
-}
+  apps: [
+    {
+      name: 'kno2gether-shopper',
+      script: 'server.js',
+      env: {
+        NODE_ENV: 'development',
+      },
+      watch: true,
+      ignore_watch: ['node_modules', '.next', '.git'],
+    },
+  ],
+};
