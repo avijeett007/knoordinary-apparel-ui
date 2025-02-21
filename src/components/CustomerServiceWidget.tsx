@@ -39,43 +39,62 @@ const LiveKitComponent = ({ onClose }: { onClose: () => void }) => {
     ({ participant }) => participant instanceof LocalParticipant
   );
 
+  const initializeMicrophone = async () => {
+    // Check if we're on localhost
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    
+    // Check if we're on HTTPS
+    const isHttps = window.location.protocol === 'https:';
+    
+    // Check if mediaDevices is supported
+    if (!navigator.mediaDevices) {
+      setMicError('Your browser does not support media devices. Please use a modern browser.');
+      return;
+    }
+
+    // If not localhost and not HTTPS, show error
+    if (!isLocalhost && !isHttps) {
+      setMicError('Microphone access requires HTTPS. Please access this site using HTTPS.');
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      await localParticipant?.setMicrophoneEnabled(true);
+      stream.getTracks().forEach(track => track.stop()); // Clean up the test stream
+      
+      // Get metadata from participant
+      const metadata = localParticipant?.metadata;
+      if (metadata) {
+        try {
+          const { phoneNumber } = JSON.parse(metadata);
+          console.log('Connected user phone number:', phoneNumber);
+          
+          // Publish initial system message with phone number
+          const timestamp = new Date().getTime();
+          setTranscripts(prev => [...prev, {
+            name: "System",
+            message: `Connected with phone number: ${phoneNumber}`,
+            timestamp,
+            isSelf: false,
+          }]);
+        } catch (err) {
+          console.error('Error parsing metadata:', err);
+        }
+      }
+    } catch (err) {
+      console.error('Error initializing microphone:', err);
+      if (err instanceof DOMException && err.name === 'NotAllowedError') {
+        setMicError('Microphone access denied. Please allow microphone access in your browser settings.');
+      } else {
+        setMicError('Failed to initialize microphone. Please check your browser permissions and try again.');
+      }
+    }
+  };
+
   useEffect(() => {
     if (roomState === ConnectionState.Connected && localParticipant) {
-      // Request microphone permission first
-      navigator.mediaDevices.getUserMedia({ audio: true })
-        .then(async (stream) => {
-          try {
-            await localParticipant.setMicrophoneEnabled(true);
-            stream.getTracks().forEach(track => track.stop()); // Clean up the test stream
-            
-            // Get metadata from participant
-            const metadata = localParticipant.metadata;
-            if (metadata) {
-              try {
-                const { phoneNumber } = JSON.parse(metadata);
-                console.log('Connected user phone number:', phoneNumber);
-                
-                // Publish initial system message with phone number
-                const timestamp = new Date().getTime();
-                setTranscripts(prev => [...prev, {
-                  name: "System",
-                  message: `Connected with phone number: ${phoneNumber}`,
-                  timestamp,
-                  isSelf: false,
-                }]);
-              } catch (err) {
-                console.error('Error parsing metadata:', err);
-              }
-            }
-          } catch (err) {
-            console.error('Error enabling microphone:', err);
-            setMicError('Failed to enable microphone. Please check your browser permissions.');
-          }
-        })
-        .catch(err => {
-          console.error('Microphone permission denied:', err);
-          setMicError('Microphone access denied. Please allow microphone access to use voice chat.');
-        });
+      initializeMicrophone();
     }
   }, [roomState, localParticipant]);
 
@@ -87,12 +106,18 @@ const LiveKitComponent = ({ onClose }: { onClose: () => void }) => {
           <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
             <strong className="font-bold">Error: </strong>
             <span className="block sm:inline">{micError}</span>
-            <button
-              className="mt-2 bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
-              onClick={() => window.location.reload()}
-            >
-              Try Again
-            </button>
+            {micError.includes('HTTPS') ? (
+              <p className="mt-2 text-sm">
+                Please access this site using HTTPS or contact your administrator to enable HTTPS.
+              </p>
+            ) : (
+              <button
+                className="mt-2 bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
+                onClick={() => window.location.reload()}
+              >
+                Try Again
+              </button>
+            )}
           </div>
         </div>
       </div>

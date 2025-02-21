@@ -1,0 +1,22 @@
+version: '3'
+
+services:
+  nextjs:
+    build: .
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.kno2gether.rule=Host(`esdemo.ddns.net`)"
+      - "traefik.http.routers.kno2gether.entrypoints=https"
+      - "traefik.http.routers.kno2gether.tls=true"
+      - "traefik.http.routers.kno2gether.tls.certresolver=letsencrypt"
+      # HTTP to HTTPS redirect
+      - "traefik.http.routers.kno2gether-http.rule=Host(`esdemo.ddns.net`)"
+      - "traefik.http.routers.kno2gether-http.entrypoints=http"
+      - "traefik.http.routers.kno2gether-http.middlewares=redirect-to-https"
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+    networks:
+      - web
+
+networks:
+  web:
+    external: true
