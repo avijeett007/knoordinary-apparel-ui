@@ -33,6 +33,7 @@ const LiveKitComponent = ({ onClose }: { onClose: () => void }) => {
   const { localParticipant } = useLocalParticipant();
   const roomState = useConnectionState();
   const tracks = useTracks();
+  const [micError, setMicError] = useState<string | null>(null);
 
   const localTracks = tracks.filter(
     ({ participant }) => participant instanceof LocalParticipant
@@ -40,29 +41,63 @@ const LiveKitComponent = ({ onClose }: { onClose: () => void }) => {
 
   useEffect(() => {
     if (roomState === ConnectionState.Connected && localParticipant) {
-      localParticipant.setMicrophoneEnabled(true);
-      
-      // Get metadata from participant
-      const metadata = localParticipant.metadata;
-      if (metadata) {
-        try {
-          const { phoneNumber } = JSON.parse(metadata);
-          console.log('Connected user phone number:', phoneNumber);
-          
-          // Publish initial system message with phone number
-          const timestamp = new Date().getTime();
-          setTranscripts(prev => [...prev, {
-            name: "System",
-            message: `Connected with phone number: ${phoneNumber}`,
-            timestamp,
-            isSelf: false,
-          }]);
-        } catch (err) {
-          console.error('Error parsing metadata:', err);
-        }
-      }
+      // Request microphone permission first
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(async (stream) => {
+          try {
+            await localParticipant.setMicrophoneEnabled(true);
+            stream.getTracks().forEach(track => track.stop()); // Clean up the test stream
+            
+            // Get metadata from participant
+            const metadata = localParticipant.metadata;
+            if (metadata) {
+              try {
+                const { phoneNumber } = JSON.parse(metadata);
+                console.log('Connected user phone number:', phoneNumber);
+                
+                // Publish initial system message with phone number
+                const timestamp = new Date().getTime();
+                setTranscripts(prev => [...prev, {
+                  name: "System",
+                  message: `Connected with phone number: ${phoneNumber}`,
+                  timestamp,
+                  isSelf: false,
+                }]);
+              } catch (err) {
+                console.error('Error parsing metadata:', err);
+              }
+            }
+          } catch (err) {
+            console.error('Error enabling microphone:', err);
+            setMicError('Failed to enable microphone. Please check your browser permissions.');
+          }
+        })
+        .catch(err => {
+          console.error('Microphone permission denied:', err);
+          setMicError('Microphone access denied. Please allow microphone access to use voice chat.');
+        });
     }
   }, [roomState, localParticipant]);
+
+  // Show error message if microphone permission is denied
+  if (micError) {
+    return (
+      <div className="flex flex-col h-full">
+        <div className="flex-1 p-4">
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+            <strong className="font-bold">Error: </strong>
+            <span className="block sm:inline">{micError}</span>
+            <button
+              className="mt-2 bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
+              onClick={() => window.location.reload()}
+            >
+              Try Again
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const onDataReceived = useCallback(
     (msg: any) => {
