@@ -24,8 +24,21 @@ async function handleGet(req: NextApiRequest, res: NextApiResponse) {
   try {
     const { phoneNumber, orderId } = req.query;
 
+    // If no query parameters, return all orders
     if (!phoneNumber && !orderId) {
-      return res.status(400).json({ message: 'Phone number or order ID is required' });
+      const allOrders = await prisma.order.findMany({
+        include: {
+          items: {
+            include: {
+              product: true
+            }
+          }
+        },
+        orderBy: {
+          createdAt: 'desc'
+        }
+      });
+      return res.status(200).json(allOrders);
     }
 
     const orders = await prisma.order.findMany({
@@ -130,15 +143,15 @@ async function handlePost(req: NextApiRequest, res: NextApiResponse) {
 // PUT /api/orders - Update order (items or status)
 async function handlePut(req: NextApiRequest, res: NextApiResponse) {
   try {
-    const { orderId, status, items } = req.body;
+    const order = req.body;
 
-    if (!orderId) {
+    if (!order || !order.id) {
       return res.status(400).json({ message: 'Order ID is required' });
     }
 
     // Get existing order
     const existingOrder = await prisma.order.findUnique({
-      where: { id: orderId },
+      where: { id: order.id },
       include: { items: true }
     });
 
@@ -148,62 +161,69 @@ async function handlePut(req: NextApiRequest, res: NextApiResponse) {
 
     // Start transaction for updates
     const updatedOrder = await prisma.$transaction(async (tx) => {
-      // Update order status if provided
-      if (status) {
+      // Update order status if changed
+      if (order.status !== existingOrder.status) {
         await tx.order.update({
-          where: { id: orderId },
-          data: { status }
+          where: { id: order.id },
+          data: { 
+            status: order.status,
+            shippingAddress: order.shippingAddress,
+            total: order.total
+          }
         });
       }
 
-      // Update order items if provided
-      if (items && Array.isArray(items)) {
-        for (const item of items) {
+      // Update order items
+      if (order.items && Array.isArray(order.items)) {
+        for (const item of order.items) {
           const existingItem = existingOrder.items.find(i => i.id === item.id);
           
           if (!existingItem) {
             throw new Error(`Order item ${item.id} not found`);
           }
 
-          // If quantity is changing, update product stock
-          if (item.quantity && item.quantity !== existingItem.quantity) {
-            const product = await tx.product.findUnique({
-              where: { id: existingItem.productId }
-            });
+          // If quantity or size is changing, update the item
+          if (item.quantity !== existingItem.quantity || item.size !== existingItem.size) {
+            // If quantity is changing, update product stock
+            if (item.quantity !== existingItem.quantity) {
+              const product = await tx.product.findUnique({
+                where: { id: existingItem.productId }
+              });
 
-            if (!product) {
-              throw new Error(`Product ${existingItem.productId} not found`);
+              if (!product) {
+                throw new Error(`Product ${existingItem.productId} not found`);
+              }
+
+              // Calculate stock difference
+              const stockDiff = existingItem.quantity - item.quantity;
+              
+              // Check if enough stock for increase
+              if (stockDiff < 0 && product.stock < Math.abs(stockDiff)) {
+                throw new Error(`Insufficient stock for product ${product.name}`);
+              }
+
+              // Update product stock
+              await tx.product.update({
+                where: { id: product.id },
+                data: { stock: product.stock + stockDiff }
+              });
             }
 
-            // Calculate stock difference
-            const stockDiff = existingItem.quantity - item.quantity;
-            
-            // Check if enough stock for increase
-            if (stockDiff < 0 && product.stock < Math.abs(stockDiff)) {
-              throw new Error(`Insufficient stock for product ${product.name}`);
-            }
-
-            // Update product stock
-            await tx.product.update({
-              where: { id: product.id },
-              data: { stock: product.stock + stockDiff }
+            // Update order item
+            await tx.orderItem.update({
+              where: { id: item.id },
+              data: {
+                quantity: item.quantity,
+                size: item.size
+              }
             });
           }
-
-          // Update order item
-          await tx.orderItem.update({
-            where: { id: item.id },
-            data: {
-              quantity: item.quantity || existingItem.quantity,
-              size: item.size || existingItem.size
-            }
-          });
         }
       }
 
-      // Return updated order
+      // Return the updated order with items
       return tx.order.findUnique({
-        where: { id: orderId },
+        where: { id: order.id },
         include: {
           items: {
             include: {

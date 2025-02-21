@@ -3,9 +3,18 @@ import { NextPage } from 'next';
 import Head from 'next/head';
 import OrderTable from '@/components/admin/OrderTable';
 import { motion } from 'framer-motion';
+import { Order, OrderItem, Product } from '@prisma/client';
+
+interface ExtendedOrderItem extends OrderItem {
+  product: Product;
+}
+
+interface ExtendedOrder extends Order {
+  items: ExtendedOrderItem[];
+}
 
 const AdminPage: NextPage = () => {
-  const [orders, setOrders] = useState([]);
+  const [orders, setOrders] = useState<ExtendedOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchPhone, setSearchPhone] = useState('');
@@ -15,6 +24,9 @@ const AdminPage: NextPage = () => {
     try {
       setLoading(true);
       const response = await fetch('/api/orders');
+      if (!response.ok) {
+        throw new Error('Failed to fetch orders');
+      }
       const data = await response.json();
       setOrders(data);
       setError('');
@@ -70,7 +82,7 @@ const AdminPage: NextPage = () => {
     }
   };
 
-  const handleUpdateOrder = async (order: any) => {
+  const handleUpdateOrder = async (order: ExtendedOrder) => {
     try {
       const response = await fetch('/api/orders', {
         method: 'PUT',
@@ -80,20 +92,24 @@ const AdminPage: NextPage = () => {
         body: JSON.stringify(order),
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        throw new Error('Failed to update order');
+        throw new Error(data.message || 'Failed to update order');
       }
 
       // Refresh orders
-      fetchOrders();
+      await fetchOrders();
+      setError('');
     } catch (err) {
-      setError('Failed to update order');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to update order';
+      setError(errorMessage);
       console.error('Error updating order:', err);
     }
   };
 
-  const filteredOrders = orders.filter((order: any) => {
-    const matchesPhone = order.phoneNumber.includes(searchPhone);
+  const filteredOrders = orders.filter((order) => {
+    const matchesPhone = order.phoneNumber.toLowerCase().includes(searchPhone.toLowerCase());
     const matchesStatus = searchStatus === 'all' || order.status === searchStatus;
     return matchesPhone && matchesStatus;
   });
@@ -119,12 +135,12 @@ const AdminPage: NextPage = () => {
                   <input
                     type="text"
                     placeholder="Search by phone number"
-                    className="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                    className="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2"
                     value={searchPhone}
                     onChange={(e) => setSearchPhone(e.target.value)}
                   />
                   <select
-                    className="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                    className="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2"
                     value={searchStatus}
                     onChange={(e) => setSearchStatus(e.target.value)}
                   >
