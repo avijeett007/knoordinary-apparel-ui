@@ -1,0 +1,7 @@
+--label "traefik.enable=true" \
+--label "traefik.http.routers.nextapp.rule=Host(`esdemo.ddns.net`)" \
+--label "traefik.http.routers.nextapp.entrypoints=https" \
+--label "traefik.http.routers.nextapp.tls=true" \
+--label "traefik.http.routers.nextapp.tls.certresolver=letsencrypt" \
+--label "traefik.http.services.nextapp.loadbalancer.server.port=3000" \
+--network web

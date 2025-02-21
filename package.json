@@ -6,8 +6,8 @@
     "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"
   },
   "scripts": {
-    "dev": "next dev --experimental-https",
-    "build": "next build",
+    "dev": "next dev --experimental-https --typescript --no-lint",
+    "build": "next build --no-lint",
     "start": "next start",
     "lint": "next lint",
     "db:seed": "prisma db seed"
